@@ -42,8 +42,8 @@ public class Proxylab{
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "Invalid URL", code: -1)
         }
-        request.timeoutInterval = 30.0
         var request = URLRequest(url: url)
+        request.timeoutInterval = 30.0
         request.httpMethod = "GET"
         request.allHTTPHeaderFields = headers
         let (data, _) = try await URLSession.shared.data(for: request)
