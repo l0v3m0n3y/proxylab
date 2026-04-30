@@ -42,6 +42,7 @@ public class Proxylab{
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "Invalid URL", code: -1)
         }
+        request.timeoutInterval = 30.0
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.allHTTPHeaderFields = headers
@@ -58,6 +59,7 @@ public class Proxylab{
         request.httpMethod = "POST"
         request.allHTTPHeaderFields = headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0
         let body: [String: Any] = ["text": proxy]
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (responseData, _) = try await URLSession.shared.data(for: request)
@@ -86,6 +88,7 @@ public class Proxylab{
         request.httpMethod = "POST"
         request.allHTTPHeaderFields = headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0
         let body: [String: Any] = ["text": proxy,"format": format]
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         
