@@ -20,81 +20,97 @@ extension URLSession {
     }
 }
 
-public class Proxylab{
+public enum HTTPMethod: String {
+    case get = "GET"
+    case post = "POST"
+    case put = "PUT"
+    case delete = "DELETE"
+    case patch = "PATCH"
+}
+
+public class Proxylab {
     private let api = "https://proxylab.live/api"
     private var headers: [String: String]
+    private let timeoutInterval: TimeInterval = 30.0
     
     public init() {
         self.headers = [
-        "Accept":"*/*",
-        "Connection":"keep-alive",
-        "Accept-Encoding":"deflate, zstd",
-        "Accept-Language":"en-US,en;q=0.9",
-        "Referer":"https://proxylab.live/",
-        "Origin":"https://proxylab.live",
-        "User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+            "Accept": "*/*",
+            "Connection": "keep-alive",
+            "Accept-Encoding": "deflate, zstd",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://proxylab.live/",
+            "Origin": "https://proxylab.live",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
         ]
-
     }
     
-    public func my_ip() async throws -> Any {
-        let urlString = "\(api)/myip"
-        guard let url = URL(string: urlString) else {
+    private func fetchJSON(
+        from urlString: String,
+        method: HTTPMethod = .get,
+        body: Data? = nil,
+        queryParameters: [String: String]? = nil
+    ) async throws -> Any {
+        var urlComponents = URLComponents(string: urlString)
+        if let queryParameters = queryParameters {
+            urlComponents?.queryItems = queryParameters.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        guard let url = urlComponents?.url else {
             throw NSError(domain: "Invalid URL", code: -1)
         }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 30.0
-        request.httpMethod = "GET"
+        request.httpMethod = method.rawValue
         request.allHTTPHeaderFields = headers
+        request.timeoutInterval = timeoutInterval
+        if let body = body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         let (data, _) = try await URLSession.shared.data(for: request)
         return try JSONSerialization.jsonObject(with: data)
     }
 
-    public func check_proxy(proxy: String) async throws -> Any {
-        let urlString = "\(api)/check"
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "Invalid URL", code: -1)
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.allHTTPHeaderFields = headers
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30.0
+    
+    public func myIp() async throws -> Any {
+        return try await fetchJSON(from: "\(api)/myip")
+    }
+    
+    public func checkProxy(proxy: String) async throws -> Any {
         let body: [String: Any] = ["text": proxy]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        let (responseData, _) = try await URLSession.shared.data(for: request)
-        guard let content = String(data: responseData, encoding: .utf8) else {
-            throw NSError(domain: "Encoding Error", code: -2)
-        }
-        let lines = content.components(separatedBy: .newlines)
-        var jsonArray: [[String: Any]] = []
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, 
-                let lineData = trimmed.data(using: .utf8),
-                let jsonObject = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] {
-                    jsonArray.append(jsonObject)
-                 }
-        }
-        return jsonArray
-    }
-
-    public func convert_proxy(proxy: String,format: String) async throws -> Any {
-        let urlString = "\(api)/convert"
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "Invalid URL", code: -1)
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.allHTTPHeaderFields = headers
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30.0
-        let body: [String: Any] = ["text": proxy,"format": format]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let bodyData = try JSONSerialization.data(withJSONObject: body, options: [])
         
-        let (responseData, _) = try await URLSession.shared.data(for: request)
-        let json = try JSONSerialization.jsonObject(with: responseData)
-        return json
+        let response = try await fetchJSON(
+            from: "\(api)/check",
+            method: .post,
+            body: bodyData
+        )
+
+        if let jsonString = response as? String {
+            let lines = jsonString.components(separatedBy: .newlines)
+            var jsonArray: [[String: Any]] = []
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty,
+                   let lineData = trimmed.data(using: .utf8),
+                   let jsonObject = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] {
+                    jsonArray.append(jsonObject)
+                }
+            }
+            return jsonArray
+        }
+        
+        return response
     }
 
+    
+    public func convertProxy(proxy: String, format: String) async throws -> Any {
+        let body: [String: Any] = ["text": proxy, "format": format]
+        let bodyData = try JSONSerialization.data(withJSONObject: body, options: [])
+        
+        return try await fetchJSON(
+            from: "\(api)/convert",
+            method: .post,
+            body: bodyData
+        )
+    }
 }
